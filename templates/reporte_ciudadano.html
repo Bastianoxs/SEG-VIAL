@@ -1,0 +1,2386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.json">
+  <title>VialCuricó — Movilidad y Alertas Urbanas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg-app: #f4f6f9;
+      --surface: #ffffff;
+      --surface-muted: #f8fafc;
+      --ink-primary: #0f172a;
+      --ink-secondary: #475569;
+      --ink-muted: #64748b;
+      --border-hairline: rgba(15, 23, 42, 0.09);
+      --brand-blue: #1d4ed8;
+      --brand-blue-soft: #eff6ff;
+      --danger-red: #dc2626;
+      --danger-red-soft: #fef2f2;
+      --safe-emerald: #059669;
+      --safe-emerald-soft: #ecfdf5;
+      --warn-amber: #d97706;
+      --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+      --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.12);
+      --shadow-lg: 0 14px 34px rgba(15, 23, 42, 0.18);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1120;
+      color: var(--ink-primary);
+      display: flex;
+      justify-content: center;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .phone-frame {
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      height: 100dvh;
+      position: relative;
+      background: var(--bg-app);
+      overflow: hidden;
+      box-shadow: 0 0 48px rgba(0, 0, 0, 0.55);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .main-view {
+      display: none;
+      flex: 1;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    }
+    .main-view.active { display: flex; flex-direction: column; }
+    #map { width: 100%; height: 100%; z-index: 1; }
+
+    .icon {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      flex-shrink: 0;
+    }
+    .icon-sm { width: 14px; height: 14px; }
+    .icon-lg { width: 20px; height: 20px; }
+
+    /* Banner Push Proactivo de Proximidad */
+    .push-toast {
+      position: absolute;
+      top: 94px;
+      left: 14px;
+      right: 68px;
+      z-index: 1100;
+      background: #0f172a;
+      color: #ffffff;
+      border-left: 4px solid #ef4444;
+      border-radius: 12px;
+      padding: 11px 13px;
+      box-shadow: var(--shadow-lg);
+      display: none;
+      animation: dropFade 0.2s ease-out;
+    }
+    .push-toast-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #fca5a5;
+    }
+    .push-toast-body {
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+    .push-toast-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn-push-locate {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-push-dismiss {
+      background: rgba(255,255,255,0.12);
+      color: #e2e8f0;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Barra superior flotante */
+    .top-bar {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 68px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .status-pill {
+      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.94);
+      color: #f8fafc;
+      backdrop-filter: blur(10px);
+      padding: 7px 13px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+    }
+
+    .gps-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #eab308;
+      display: inline-block;
+    }
+    .gps-indicator.active {
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+    }
+    .gps-indicator.manual {
+      background: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+    }
+    .gps-indicator.inactive {
+      background: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+    }
+
+    /* Drawer diagnóstico GPS */
+    .gps-drawer {
+      position: absolute;
+      top: 52px;
+      left: 14px;
+      width: 255px;
+      z-index: 1050;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: var(--shadow-lg);
+      display: none;
+      border: 1px solid var(--border-hairline);
+      animation: dropFade 0.16s ease-out;
+    }
+    .gps-drawer-msg {
+      font-size: 11.5px;
+      color: var(--ink-secondary);
+      line-height: 1.4;
+      margin: 6px 0 10px;
+    }
+    .gps-drawer-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .btn-gps-opt {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-hairline);
+      background: var(--surface-muted);
+      color: var(--ink-primary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .btn-gps-opt.primary {
+      background: var(--brand-blue);
+      color: #ffffff;
+      border-color: var(--brand-blue);
+    }
+
+    .weather-pill {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--ink-primary);
+      backdrop-filter: blur(10px);
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-hairline);
+      cursor: pointer;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Panel Clima Vertical Minimalista */
+    .weather-drawer {
+      position: absolute;
+      top: 90px;
+      left: 14px;
+      width: 196px;
+      z-index: 1002;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: var(--shadow-lg);
+      display: none;
+      border: 1px solid var(--border-hairline);
+      animation: dropFade 0.16s ease-out;
+    }
+    @keyframes dropFade {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .weather-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .weather-city {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink-muted);
+    }
+    .weather-temp-now {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--ink-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .icon-close-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: none;
+      background: var(--surface-muted);
+      color: var(--ink-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .weather-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 8px 0;
+    }
+    .weather-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      padding: 5px 7px;
+      background: var(--surface-muted);
+      border-radius: 7px;
+      font-variant-numeric: tabular-nums;
+    }
+    .weather-row-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink-secondary);
+      font-weight: 500;
+    }
+    .weather-rain-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-primary);
+      padding-top: 8px;
+      border-top: 1px solid var(--border-hairline);
+    }
+
+    /* Switch estilo nativo */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 19px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #cbd5e1;
+      border-radius: 999px;
+      transition: 0.2s;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 15px;
+      width: 15px;
+      left: 2px;
+      bottom: 2px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--brand-blue); }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(15px); }
+
+    /* Controles flotantes derechos */
+    .right-toolbar {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-hairline);
+    }
+    .tool-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--ink-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tool-btn:hover { background: var(--surface-muted); color: var(--ink-primary); }
+    .tool-btn.active { background: var(--brand-blue); color: #ffffff; }
+
+    /* Popover de filtros */
+    .filter-popover {
+      position: absolute;
+      top: 14px;
+      right: 66px;
+      z-index: 1002;
+      width: 235px;
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 13px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-hairline);
+      display: none;
+    }
+    .popover-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--ink-muted);
+    }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 10px; }
+    .chip {
+      padding: 5px 10px;
+      border-radius: 7px;
+      border: 1px solid var(--border-hairline);
+      background: var(--surface-muted);
+      color: var(--ink-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chip.active { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
+    .switch-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-primary);
+      padding: 7px 0 2px;
+      border-top: 1px solid var(--border-hairline);
+    }
+
+    /* Controles inferiores del mapa */
+    .map-bottom-controls {
+      position: absolute;
+      bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+      left: 14px;
+      right: 14px;
+      z-index: 1200;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .action-pills-row {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .btn-como-llegar {
+      background: var(--brand-blue);
+      color: #ffffff;
+      border: none;
+      padding: 13px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(29, 78, 216, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .fab-reportar {
+      background: var(--ink-primary);
+      color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 13px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    /* Tarjeta de Planificación de Ruta */
+    .route-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow-lg);
+      display: none;
+      border: 1px solid var(--border-hairline);
+      pointer-events: auto;
+    }
+    .route-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .route-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink-primary);
+      letter-spacing: -0.01em;
+    }
+    .btn-cancel-route {
+      background: var(--surface-muted);
+      color: var(--ink-secondary);
+      border: 1px solid var(--border-hairline);
+      padding: 4px 10px;
+      border-radius: 7px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .route-waypoints-box {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .waypoint-track {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 11px 0;
+      width: 14px;
+    }
+    .dot-origin {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      border: 2.5px solid var(--brand-blue);
+      background: #ffffff;
+    }
+    .track-line {
+      flex: 1;
+      width: 1.5px;
+      background: #cbd5e1;
+      margin: 3px 0;
+    }
+    .dot-dest {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: var(--danger-red);
+    }
+    .route-inputs-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .input-with-btn { display: flex; gap: 6px; align-items: center; }
+    .route-input {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
+      background: var(--surface-muted);
+      color: var(--ink-primary);
+    }
+    .route-input:focus {
+      outline: none;
+      border-color: var(--brand-blue);
+      background: #ffffff;
+    }
+    .mini-icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      border: 1px solid #cbd5e1;
+      background: var(--surface-muted);
+      color: var(--ink-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .suggestions-list {
+      background: var(--surface);
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+      display: none;
+      margin-top: 6px;
+      box-shadow: var(--shadow-md);
+    }
+    .suggestion-item {
+      padding: 8px 11px;
+      border-bottom: 1px solid var(--border-hairline);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--ink-secondary);
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: var(--brand-blue-soft); }
+    .sug-title { font-size: 12.5px; font-weight: 600; color: var(--ink-primary); }
+    .sug-sub { font-size: 11px; color: var(--ink-muted); }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin-top: 10px;
+      background: var(--surface-muted);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--border-hairline);
+    }
+    .mode-btn {
+      padding: 6px 4px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--ink-secondary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: 0.15s;
+    }
+    .mode-btn.active {
+      background: #ffffff;
+      color: var(--brand-blue);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+    }
+
+    .route-options-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 9px;
+    }
+    .route-option-card {
+      border: 1.5px solid var(--border-hairline);
+      background: var(--surface-muted);
+      border-radius: 10px;
+      padding: 9px 11px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .route-option-card.selected-safe {
+      background: var(--safe-emerald-soft);
+      border-color: var(--safe-emerald);
+    }
+    .route-option-card.selected-short {
+      background: var(--brand-blue-soft);
+      border-color: var(--brand-blue);
+    }
+    .route-option-card.selected-danger {
+      background: var(--danger-red-soft);
+      border-color: var(--danger-red);
+    }
+    .route-opt-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-primary);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .route-opt-sub {
+      font-size: 11px;
+      color: var(--ink-secondary);
+      margin-top: 2px;
+      line-height: 1.3;
+    }
+    .route-opt-metrics {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .route-opt-min {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--ink-primary);
+      line-height: 1.1;
+    }
+    .route-opt-km {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--ink-muted);
+    }
+
+    /* Vistas laterales */
+    .page-header {
+      background: var(--surface);
+      color: var(--ink-primary);
+      padding: 15px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      border-bottom: 1px solid var(--border-hairline);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-count {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-muted);
+      background: var(--surface-muted);
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--border-hairline);
+    }
+    .cerca-toolbar {
+      background: var(--surface);
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border-hairline);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .sort-pills { display: flex; gap: 5px; }
+    .sort-pill {
+      padding: 5px 10px;
+      border-radius: 7px;
+      border: 1px solid var(--border-hairline);
+      background: var(--surface-muted);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-secondary);
+      cursor: pointer;
+    }
+    .sort-pill.active {
+      background: var(--ink-primary);
+      color: #ffffff;
+      border-color: var(--ink-primary);
+    }
+    .radio-select {
+      padding: 5px 8px;
+      border-radius: 7px;
+      border: 1px solid var(--border-hairline);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: var(--surface-muted);
+      color: var(--ink-primary);
+    }
+    .scroll-body { flex: 1; overflow-y: auto; padding: 14px; }
+    .card-box {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 14px;
+      border: 1px solid var(--border-hairline);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 12px;
+    }
+    .alerta-item {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      border: 1px solid var(--border-hairline);
+      box-shadow: var(--shadow-sm);
+    }
+    .alerta-item img {
+      width: 72px;
+      height: 72px;
+      border-radius: 9px;
+      object-fit: cover;
+      background: #e2e8f0;
+      flex-shrink: 0;
+    }
+    .dist-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: var(--brand-blue-soft);
+      color: var(--brand-blue);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .fecha-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 5px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .item-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .btn-ver-mapa {
+      padding: 5px 10px;
+      background: var(--surface-muted);
+      color: var(--ink-primary);
+      border: 1px solid var(--border-hairline);
+      border-radius: 7px;
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-despejar {
+      padding: 5px 10px;
+      background: var(--safe-emerald);
+      color: #ffffff;
+      border: none;
+      border-radius: 7px;
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Formularios Auth y Perfil */
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      background: var(--surface-muted);
+      padding: 3px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-hairline);
+    }
+    .auth-tab {
+      padding: 8px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--ink-secondary);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .auth-tab.active {
+      background: #ffffff;
+      color: var(--ink-primary);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+    }
+    .form-field {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 13.5px;
+      margin-bottom: 10px;
+      background: var(--surface-muted);
+    }
+    .form-field:focus { outline: none; border-color: var(--brand-blue); background: #ffffff; }
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      background: var(--brand-blue);
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+    }
+    .profile-hero { display: flex; align-items: center; gap: 14px; }
+    .profile-avatar-lg {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: var(--ink-primary);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      font-weight: 700;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .profile-avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* Modal Reportar */
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .sheet {
+      width: 100%;
+      max-height: 85dvh;
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+      overflow-y: auto;
+    }
+
+    /* Barra inferior de 3 pestañas */
+    .bottom-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: calc(64px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border-hairline);
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      z-index: 1500;
+    }
+    .nav-btn {
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      position: relative;
+    }
+    .nav-btn.active { color: var(--brand-blue); }
+    .nav-btn.active::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      width: 28px;
+      height: 2.5px;
+      border-radius: 0 0 3px 3px;
+      background: var(--brand-blue);
+    }
+    .nav-avatar-mini {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--ink-secondary);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .nav-avatar-mini img { width: 100%; height: 100%; object-fit: cover; }
+
+    .custom-pin {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2.5px solid #ffffff;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.35);
+    }
+
+    .user-pulse-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #1d4ed8;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 5px rgba(29, 78, 216, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="phone-frame">
+
+    <!-- ==================== PESTAÑA IZQUIERDA: ALERTAS CERCA DE MÍ ==================== -->
+    <div id="viewCerca" class="main-view">
+      <div class="page-header">
+        <span>Incidencias cercanas</span>
+        <span class="header-count" id="contadorCerca">0 alertas</span>
+      </div>
+      <div class="cerca-toolbar">
+        <div class="sort-pills">
+          <button class="sort-pill active" id="sortDistBtn" onclick="cambiarOrdenCerca('distancia')">Más cercanas</button>
+          <button class="sort-pill" id="sortDateBtn" onclick="cambiarOrdenCerca('fecha')">Más recientes</button>
+        </div>
+        <select id="radioCercaSelect" class="radio-select" onchange="renderAlertasCercanas()">
+          <option value="999">Todo Curicó</option>
+          <option value="1">Radio 1 km</option>
+          <option value="2">Radio 2 km</option>
+          <option value="5">Radio 5 km</option>
+        </select>
+      </div>
+      <div class="scroll-body" id="listaAlertasCerca">
+        Cargando alertas cercanas...
+      </div>
+    </div>
+
+    <!-- ==================== PESTAÑA CENTRAL: MAPA INTERACTIVO ==================== -->
+    <div id="viewMapa" class="main-view active">
+      <div id="map"></div>
+
+      <!-- Notificación Push Proactiva en Tiempo Real -->
+      <div class="push-toast" id="pushToast">
+        <div class="push-toast-head">
+          <span>Alerta de proximidad vial</span>
+          <span id="pushToastDist">-- m</span>
+        </div>
+        <div class="push-toast-body" id="pushToastText">Incidencia detectada cerca de tu recorrido.</div>
+        <div class="push-toast-actions">
+          <button class="btn-push-locate" id="btnPushLocate">Ver en mapa</button>
+          <button class="btn-push-dismiss" onclick="cerrarPushToast()">Entendido</button>
+        </div>
+      </div>
+
+      <!-- Barra superior izquierda: GPS + Clima -->
+      <div class="top-bar">
+        <div class="status-pill" onclick="toggleGpsDrawer()">
+          <span class="gps-indicator" id="gpsDot"></span>
+          <span id="gpsLabel">Buscando GPS...</span>
+        </div>
+        <div class="weather-pill" onclick="toggleWeather()">
+          <span id="weatherIconSlot"></span>
+          <span id="weatherMini">19°C · Curicó</span>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+      </div>
+
+      <!-- Panel Diagnóstico y Control de Ubicación GPS -->
+      <div class="gps-drawer" id="gpsDrawer">
+        <div class="weather-head">
+          <span class="weather-city">Ubicación en tiempo real</span>
+          <button class="icon-close-btn" onclick="toggleGpsDrawer()">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div class="gps-drawer-msg" id="gpsDiagnosticMsg">
+          Detectando señal satelital del dispositivo...
+        </div>
+        <div class="gps-drawer-actions">
+          <button type="button" class="btn-gps-opt primary" onclick="iniciarSeguimientoGPS(true); toggleGpsDrawer();">
+            Activar seguimiento GPS real
+          </button>
+          <button type="button" class="btn-gps-opt" onclick="activarModoPinManual()">
+            Marcar mi posición tocando el mapa
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel Clima Vertical Minimalista -->
+      <div class="weather-drawer" id="weatherDrawer">
+        <div class="weather-head">
+          <div>
+            <div class="weather-city">Curicó · Pronóstico</div>
+            <div class="weather-temp-now" id="weatherBigTemp">19°C</div>
+          </div>
+          <button class="icon-close-btn" onclick="toggleWeather()" aria-label="Cerrar clima">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div class="weather-list" id="weatherVerticalList"></div>
+        <div class="weather-rain-row">
+          <span>Simular lluvia intensa</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkLluvia" onchange="toggleRiesgoClimatico()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Barra vertical derecha -->
+      <div class="right-toolbar">
+        <button class="tool-btn" id="btnFilterTool" onclick="toggleFilters()" title="Filtrar incidencias">
+          <svg class="icon" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        </button>
+        <button class="tool-btn active" id="btnPushTool" onclick="togglePushProactivo()" title="Alertas de proximidad en tiempo real">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        </button>
+        <button class="tool-btn" id="btnNearTool" onclick="toggleSoloCercaMapa()" title="Radio de proximidad">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
+        </button>
+        <button class="tool-btn" onclick="centrarEnUsuario()" title="Centrar ubicación">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <!-- Popover de filtros -->
+      <div class="filter-popover" id="filterPopover">
+        <div class="popover-title">Categoría de riesgo</div>
+        <div class="chip-group" id="riskChips">
+          <button class="chip active" onclick="setFiltroRiesgo('', this)">Todos</button>
+          <button class="chip" onclick="setFiltroRiesgo('Motorizado', this)">Vehículo</button>
+          <button class="chip" onclick="setFiltroRiesgo('Ciclista', this)">Ciclista</button>
+          <button class="chip" onclick="setFiltroRiesgo('Peatonal', this)">Peatón</button>
+        </div>
+        <div class="switch-row">
+          <span>Radio cercano (1.5 km)</span>
+          <input type="checkbox" id="chkCerca" onchange="aplicarFiltrosMapa()">
+        </div>
+        <div class="switch-row">
+          <span>Solo riesgo climático</span>
+          <input type="checkbox" id="chkClimaFiltro" onchange="aplicarFiltrosMapa()">
+        </div>
+      </div>
+
+      <!-- Controles inferiores: "Cómo llegar" + Reportar -->
+      <div class="map-bottom-controls">
+        <div class="action-pills-row" id="idleActionRow">
+          <button class="btn-como-llegar" onclick="abrirComoLlegar()">
+            <svg class="icon" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+            <span>Cómo llegar</span>
+          </button>
+          <button class="fab-reportar" onclick="abrirModalReportar()">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+            <span>Reportar</span>
+          </button>
+        </div>
+
+        <!-- Tarjeta de Trazado de Ruta -->
+        <div class="route-card" id="routeCard">
+          <div class="route-header">
+            <span class="route-title">Planificar recorrido</span>
+            <button class="btn-cancel-route" onclick="cancelarComoLlegar()">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <span>Cancelar</span>
+            </button>
+          </div>
+
+          <div class="route-waypoints-box">
+            <div class="waypoint-track">
+              <span class="dot-origin"></span>
+              <span class="track-line"></span>
+              <span class="dot-dest"></span>
+            </div>
+            <div class="route-inputs-col">
+              <div class="input-with-btn">
+                <input type="text" id="inputOrigen" class="route-input"
+                       value="Mi ubicación actual (GPS)"
+                       onfocus="this.select()"
+                       oninput="buscarSugerencias(this.value, 'origen')">
+                <button type="button" class="mini-icon-btn" onclick="usarGPSComoOrigen()" title="Usar GPS actual">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+              <input type="text" id="inputDestino" class="route-input"
+                     placeholder="Buscar destino o tocar el mapa..."
+                     onfocus="buscarSugerencias(this.value, 'destino')"
+                     oninput="buscarSugerencias(this.value, 'destino')">
+            </div>
+          </div>
+
+          <div class="suggestions-list" id="suggestionsList"></div>
+
+          <div class="mode-tabs">
+            <button class="mode-btn active" id="mode-driving" onclick="cambiarModoTransporte('driving')">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"></path><circle cx="6.5" cy="16.5" r="2.5"></circle><circle cx="16.5" cy="16.5" r="2.5"></circle></svg>
+              <span>Vehículo</span>
+            </button>
+            <button class="mode-btn" id="mode-cycling" onclick="cambiarModoTransporte('cycling')">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="5.5" cy="17.5" r="3.5"></circle><circle cx="18.5" cy="17.5" r="3.5"></circle><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2"></path></svg>
+              <span>Bicicleta</span>
+            </button>
+            <button class="mode-btn" id="mode-foot" onclick="cambiarModoTransporte('foot')">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"></circle><path d="m7 21 3-4"></path><path d="m16 21-2-4-3-3 1-6"></path><path d="m6 12 2-3 4-1 3 3 3 1"></path></svg>
+              <span>Caminando</span>
+            </button>
+          </div>
+
+          <div id="routeResultArea" style="display:none;">
+            <div class="route-options-stack" id="routeOptionsStack"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PESTAÑA DERECHA: USUARIO E HISTORIAL ==================== -->
+    <div id="viewUsuario" class="main-view">
+      <div class="page-header">
+        <span>Cuenta ciudadana</span>
+      </div>
+      <div class="scroll-body">
+        <div id="authSection" class="card-box">
+          <div class="auth-tabs">
+            <button class="auth-tab active" id="tabBtnLogin" onclick="switchAuthTab('login')">Iniciar sesión</button>
+            <button class="auth-tab" id="tabBtnReg" onclick="switchAuthTab('register')">Registrarse</button>
+          </div>
+
+          <form id="formLogin">
+            <input type="text" id="loginUser" class="form-field" placeholder="Nombre de usuario" required>
+            <input type="password" id="loginPass" class="form-field" placeholder="Contraseña" required>
+            <button type="submit" class="btn-primary">Ingresar</button>
+          </form>
+
+          <form id="formRegister" style="display:none;">
+            <input type="text" name="username" class="form-field" placeholder="Usuario (ej. bastian_curico)" required>
+            <input type="text" name="rut" class="form-field" placeholder="RUT (ej. 12.345.678-9)" required>
+            <input type="email" name="email" class="form-field" placeholder="Correo electrónico" required>
+            <input type="password" name="password" class="form-field" placeholder="Contraseña" required>
+            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Foto de perfil (opcional)</label>
+            <input type="file" name="foto" accept="image/*" style="margin-bottom:12px; font-size:12px;">
+            <button type="submit" class="btn-primary">Crear cuenta</button>
+          </form>
+          <div id="authError" style="color:#dc2626; font-size:12px; margin-top:8px; font-weight:600;"></div>
+        </div>
+
+        <div id="profileSection" style="display:none;">
+          <div class="card-box">
+            <div class="profile-hero">
+              <div class="profile-avatar-lg" id="profileAvatarLg">U</div>
+              <div style="flex:1;">
+                <div style="font-size:15px; font-weight:700;" id="profUsername">Usuario</div>
+                <div style="font-size:12px; color:#475569; margin-top:2px;" id="profRut">RUT: --</div>
+                <div style="font-size:12px; color:#64748b;" id="profEmail">correo@ejemplo.cl</div>
+              </div>
+            </div>
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-hairline);">
+              <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Actualizar fotografía de perfil</label>
+              <input type="file" accept="image/*" onchange="subirNuevaFotoPerfil(this)" style="font-size:12px;">
+            </div>
+          </div>
+
+          <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-muted); margin:16px 0 8px;">
+            Historial de reportes propios
+          </div>
+          <div id="misAlertasLista">Cargando historial...</div>
+
+          <button onclick="cerrarSesion()" style="width:100%; margin-top:14px; padding:11px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:10px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL REPORTAR CON GPS -->
+    <div class="modal-backdrop" id="modalReportar">
+      <div class="sheet">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:16px; font-weight:700;">Reportar incidencia vial</h3>
+          <button class="icon-close-btn" onclick="cerrarModalReportar()">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div id="gpsGuardBox" style="padding:10px 12px; border-radius:9px; font-size:12px; font-weight:500; margin-bottom:12px;"></div>
+        <form id="formNuevoReporte">
+          <label style="font-size:12px; font-weight:600; color:var(--ink-secondary);">Clasificación y nivel de riesgo</label>
+          <select name="clasificacion" class="form-field" required style="margin-top:4px;">
+            <option value="">Selecciona el evento detectado...</option>
+            {% for c in clasificaciones %}
+              <option value="{{ c.id }}">{{ c.tipo }} — {{ c.nombre_evento }} ({{ c.nivel_riesgo }})</option>
+            {% endfor %}
+          </select>
+          <label style="font-size:12px; font-weight:600; color:var(--ink-secondary);">Evidencia fotográfica</label>
+          <input type="file" name="fotografia" accept="image/*" capture="environment" required style="display:block; margin:6px 0 14px; font-size:12px;">
+          <button type="submit" class="btn-primary" id="btnEnviarReporte" style="background:var(--danger-red);">
+            Publicar reporte en ubicación actual
+          </button>
+        </form>
+        <div id="reporteFeedback" style="margin-top:8px; font-size:12px; font-weight:600;"></div>
+      </div>
+    </div>
+
+    <!-- BARRA INFERIOR DE 3 PESTAÑAS -->
+    <nav class="bottom-nav">
+      <button class="nav-btn" id="navCerca" onclick="cambiarVista('Cerca')">
+        <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
+        <span>Cerca de mí</span>
+      </button>
+      <button class="nav-btn active" id="navMapa" onclick="cambiarVista('Mapa')">
+        <svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+        <span>Mapa</span>
+      </button>
+      <button class="nav-btn" id="navUsuario" onclick="cambiarVista('Usuario')">
+        <span class="nav-avatar-mini" id="navAvatarMini">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </span>
+        <span>Cuenta</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const SVG = {
+      pin: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>',
+      clock: '<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
+      shield: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>',
+      alert: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+      check: '<svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+      sun: '<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line></svg>',
+      cloud: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>',
+      rain: '<svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="16" y1="13" x2="16" y2="21"></line><line x1="8" y1="13" x2="8" y2="21"></line><line x1="12" y1="15" x2="12" y2="23"></line><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path></svg>',
+      user: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+      pinCar: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"></path><circle cx="6.5" cy="16.5" r="2.5"></circle><circle cx="16.5" cy="16.5" r="2.5"></circle></svg>',
+      pinBike: '<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="5.5" cy="17.5" r="3.5"></circle><circle cx="18.5" cy="17.5" r="3.5"></circle><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2"></path></svg>',
+      pinWalk: '<svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"></circle><path d="m7 21 3-4"></path><path d="m16 21-2-4-3-3 1-6"></path></svg>',
+      pinFlood: '<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path></svg>'
+    };
+
+    let token = localStorage.getItem('ciudadano_jwt') || '';
+    let usuarioActual = JSON.parse(localStorage.getItem('ciudadano_user') || 'null');
+    let userCoords = null;
+    let watchId = null;
+    let modoFijarUbicacionManual = false;
+    let todasLasAlertas = [];
+    let markersPorAlertaId = {};
+    let filtroRiesgo = '';
+    let ordenCerca = 'distancia';
+    let modoRutaActivo = false;
+    let origenCoords = null;
+    let destinoCoords = null;
+    let modoTransporte = 'driving';
+    let lluviaActiva = false;
+    let pushActivo = true;
+    let alertasNotificadasIds = new Set();
+    let rutasCalculadas = { principal: null, alternativa: null, seleccionada: 'principal' };
+
+    const CURICO_CENTER = [-34.9854, -71.2394];
+
+    const lugaresCurico = [
+      { nombre: 'Plaza de Armas de Curicó', sub: 'Estado / Merced, Centro Curicó', lat: -34.9828, lng: -71.2394 },
+      { nombre: 'INACAP Sede Curicó', sub: 'Av. Archipiélago Juan Fernández 2010', lat: -34.9965, lng: -71.2312 },
+      { nombre: 'Mall Curicó', sub: 'Av. O’Higgins 201, Curicó', lat: -34.9896, lng: -71.2448 },
+      { nombre: 'Hospital Provincial de Curicó', sub: 'Av. San Martín / Chacabuco', lat: -34.9765, lng: -71.2355 },
+      { nombre: 'Terminal de Buses Curicó', sub: 'Av. Arturo Prat / Maipú', lat: -34.9838, lng: -71.2455 },
+      { nombre: 'Estación de Trenes Curicó', sub: 'Av. Maipú / Freire', lat: -34.9855, lng: -71.2468 },
+      { nombre: 'Paso Bajo Nivel Freire', sub: 'Av. Freire, Curicó', lat: -34.9859, lng: -71.2476 },
+      { nombre: 'Cerro Condell', sub: 'Alameda Manso de Velasco, Curicó', lat: -34.9788, lng: -71.2315 },
+      { nombre: 'Estadio La Granja', sub: 'Av. Juan Luis Diez 1345, Curicó', lat: -34.9742, lng: -71.2305 },
+      { nombre: 'Alameda Manso de Velasco', sub: 'Paseo Peatonal y Ciclovía, Curicó', lat: -34.9815, lng: -71.2362 },
+      { nombre: 'Av. Camilo Henríquez', sub: 'Sector Centro / Aguas Negras', lat: -34.9845, lng: -71.2340 },
+      { nombre: 'Av. España', sub: 'Sector Residencial Norte, Curicó', lat: -34.9720, lng: -71.2380 }
+    ];
+
+    const zonasInundablesCurico = [
+      { nombre: 'Paso Bajo Nivel Freire', lat: -34.9859, lng: -71.2476 },
+      { nombre: 'Av. Camilo Henríquez / Alameda', lat: -34.9812, lng: -71.2368 },
+      { nombre: 'Paso Bajo Nivel Villota', lat: -34.9795, lng: -71.2442 }
+    ];
+
+    const map = L.map('map', { zoomControl: false }).setView(CURICO_CENTER, 14);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: '&copy; Esri &mdash; OpenStreetMap'
+    }).addTo(map);
+
+    let layerAlertas = L.layerGroup().addTo(map);
+    let layerZonasClima = L.layerGroup().addTo(map);
+    let layerRutas = L.layerGroup().addTo(map);
+    let markerUsuario = null;
+    let circuloProximidad = null;
+    let markerOrigen = null;
+    let markerDestino = null;
+
+    // --- GPS EN TIEMPO REAL CON WATCHPOSITION + RESPALDO ---
+    function toggleGpsDrawer() {
+      const el = document.getElementById('gpsDrawer');
+      el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function iniciarSeguimientoGPS(centrarPrimeraVez = false, altaPrecision = true) {
+      if (!navigator.geolocation) {
+        actualizarEstadoGPS('inactive', 'Sin soporte GPS', 'Tu navegador no soporta geolocalización.');
+        return;
+      }
+
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+
+      let yaCentro = false;
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          modoFijarUbicacionManual = false;
+          userCoords = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            acc: Math.round(pos.coords.accuracy),
+            modo: 'real'
+          };
+          actualizarEstadoGPS(
+            'active',
+            `GPS en vivo (±${userCoords.acc} m)`,
+            `Coordenadas reales activas: ${userCoords.lat.toFixed(5)}, ${userCoords.lng.toFixed(5)}. También puedes arrastrar el punto azul si necesitas ajustar.`
+          );
+          const debeCentrar = centrarPrimeraVez && !yaCentro;
+          if (debeCentrar) yaCentro = true;
+          dibujarUsuarioEnMapa(debeCentrar);
+          actualizarGuardiaGPSReporte();
+          aplicarFiltrosMapa();
+          renderAlertasCercanas();
+          verificarAlertasProximidad();
+        },
+        err => {
+          // Si falla alta precisión (ej. PC sin chip GPS), reintenta automáticamente con ubicación de red/Wi-Fi
+          if (altaPrecision && (err.code === 2 || err.code === 3)) {
+            iniciarSeguimientoGPS(centrarPrimeraVez, false);
+            return;
+          }
+
+          let tituloPill = 'GPS no disponible';
+          let detalle = 'No se pudo obtener la posición automática.';
+
+          if (!window.isSecureContext) {
+            tituloPill = 'GPS requiere HTTPS';
+            detalle = 'Estás accediendo por HTTP desde una IP local. Los celulares bloquean el GPS sin HTTPS. Usa un túnel HTTPS (ej. cloudflared) o marca tu posición tocando el mapa.';
+          } else if (err.code === 1) {
+            tituloPill = 'Permiso GPS denegado';
+            detalle = 'Habilita el permiso de ubicación en los ajustes de tu navegador o marca tu posición tocando el mapa.';
+          } else {
+            tituloPill = 'Sin señal GPS';
+            detalle = 'El dispositivo no reportó señal satelital ni Wi-Fi. Puedes marcar tu posición tocando el mapa.';
+          }
+
+          actualizarEstadoGPS('inactive', tituloPill, detalle);
+          actualizarGuardiaGPSReporte();
+        },
+        {
+          enableHighAccuracy: altaPrecision,
+          maximumAge: 4000,
+          timeout: altaPrecision ? 8000 : 15000
+        }
+      );
+    }
+
+    function activarModoPinManual() {
+      modoFijarUbicacionManual = true;
+      document.getElementById('gpsDrawer').style.display = 'none';
+      actualizarEstadoGPS(
+        'manual',
+        'Toca el mapa para ubicarte',
+        'Toca cualquier punto del mapa para fijar tu posición actual.'
+      );
+    }
+
+    function fijarUbicacionManual(lat, lng) {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      modoFijarUbicacionManual = false;
+      userCoords = { lat, lng, acc: 5, modo: 'manual' };
+      actualizarEstadoGPS(
+        'manual',
+        'Ubicación fijada en mapa',
+        `Posición manual: ${lat.toFixed(5)}, ${lng.toFixed(5)}. Puedes arrastrar el marcador azul en cualquier momento.`
+      );
+      dibujarUsuarioEnMapa(false);
+      actualizarGuardiaGPSReporte();
+      aplicarFiltrosMapa();
+      renderAlertasCercanas();
+      verificarAlertasProximidad();
+    }
+
+    function actualizarEstadoGPS(estado, etiqueta, diagnostico) {
+      const dot = document.getElementById('gpsDot');
+      dot.className = 'gps-indicator ' + estado;
+      document.getElementById('gpsLabel').textContent = etiqueta;
+      if (diagnostico) {
+        document.getElementById('gpsDiagnosticMsg').textContent = diagnostico;
+      }
+    }
+
+    function dibujarUsuarioEnMapa(centrar) {
+      if (!userCoords) return;
+      const ll = [userCoords.lat, userCoords.lng];
+      if (!markerUsuario) {
+        const userIcon = L.divIcon({
+          className: '',
+          html: '<div class="user-pulse-dot"></div>',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        markerUsuario = L.marker(ll, { icon: userIcon, draggable: true })
+          .addTo(map)
+          .bindPopup('Tu ubicación actual (puedes arrastrar este punto)');
+
+        markerUsuario.on('dragend', e => {
+          const pos = e.target.getLatLng();
+          fijarUbicacionManual(pos.lat, pos.lng);
+        });
+      } else {
+        markerUsuario.setLatLng(ll);
+      }
+      if (centrar) map.setView(ll, 16);
+    }
+
+    function centrarEnUsuario() {
+      if (userCoords) {
+        map.setView([userCoords.lat, userCoords.lng], 16);
+      } else {
+        iniciarSeguimientoGPS(true);
+        toggleGpsDrawer();
+      }
+    }
+
+    // --- NOTIFICACIONES PUSH PROACTIVAS EN TIEMPO REAL ---
+    function togglePushProactivo() {
+      pushActivo = !pushActivo;
+      document.getElementById('btnPushTool').classList.toggle('active', pushActivo);
+      if (pushActivo && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+      if (pushActivo) verificarAlertasProximidad();
+      else cerrarPushToast();
+    }
+
+    function cerrarPushToast() {
+      document.getElementById('pushToast').style.display = 'none';
+    }
+
+    async function verificarAlertasProximidad() {
+      if (!pushActivo || !userCoords) return;
+      const mapaModo = { driving: 'Motorizado', cycling: 'Ciclista', foot: 'Peatonal' };
+      const modo = mapaModo[modoTransporte] || '';
+
+      try {
+        const res = await fetch(`/api/incidencias/alertas_proximidad/?lat=${userCoords.lat}&lng=${userCoords.lng}&radio_m=450&modo=${modo}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const nueva = (data.alertas || []).find(a => !alertasNotificadasIds.has(a.id));
+        if (!nueva) return;
+
+        alertasNotificadasIds.add(nueva.id);
+        const det = nueva.clasificacion_detalle;
+        const msg = `${det.nombre_evento} (${det.tipo}) a ${nueva.distancia_metros} m de tu ubicación.`;
+
+        document.getElementById('pushToastDist').textContent = `${nueva.distancia_metros} m`;
+        document.getElementById('pushToastText').textContent = msg;
+        document.getElementById('pushToast').style.display = 'block';
+        document.getElementById('btnPushLocate').onclick = () => {
+          cerrarPushToast();
+          verAlertaEnMapa(nueva.id, nueva.latitud, nueva.longitud);
+        };
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Alerta Vial Cercana — Curicó', { body: msg });
+        }
+      } catch (e) {}
+    }
+
+    function obtenerFechaPublicacion(inc) {
+      const raw = inc.fecha_creacion || inc.fecha_reporte || inc.created_at || inc.fecha ||
+        Object.values(inc).find(v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v));
+      if (!raw) return 'Publicado recientemente';
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return raw;
+      return d.toLocaleString('es-CL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function obtenerTimestampAlerta(inc) {
+      const raw = inc.fecha_creacion || inc.fecha_reporte || inc.created_at || inc.fecha ||
+        Object.values(inc).find(v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v));
+      return raw ? new Date(raw).getTime() || 0 : inc.id || 0;
+    }
+
+    // --- NAVEGACIÓN DE 3 PESTAÑAS ---
+    function cambiarVista(vista) {
+      document.querySelectorAll('.main-view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('view' + vista).classList.add('active');
+      document.getElementById('nav' + vista).classList.add('active');
+
+      if (vista === 'Mapa') setTimeout(() => map.invalidateSize(), 120);
+      if (vista === 'Cerca') renderAlertasCercanas();
+      if (vista === 'Usuario') renderVistaUsuario();
+    }
+
+    function verAlertaEnMapa(id, lat, lng) {
+      cambiarVista('Mapa');
+      setTimeout(() => {
+        map.setView([lat, lng], 17);
+        if (markersPorAlertaId[id]) markersPorAlertaId[id].openPopup();
+      }, 150);
+    }
+
+    // --- FLUJO "CÓMO LLEGAR" + AUTOCOMPLETADO ---
+    function abrirComoLlegar() {
+      modoRutaActivo = true;
+      document.getElementById('idleActionRow').style.display = 'none';
+      document.getElementById('routeCard').style.display = 'block';
+      usarGPSComoOrigen();
+    }
+
+    function cancelarComoLlegar() {
+      modoRutaActivo = false;
+      destinoCoords = null;
+      rutasCalculadas = { principal: null, alternativa: null, seleccionada: 'principal' };
+      layerRutas.clearLayers();
+      if (markerOrigen) { map.removeLayer(markerOrigen); markerOrigen = null; }
+      if (markerDestino) { map.removeLayer(markerDestino); markerDestino = null; }
+      document.getElementById('inputDestino').value = '';
+      document.getElementById('suggestionsList').style.display = 'none';
+      document.getElementById('routeResultArea').style.display = 'none';
+      document.getElementById('routeCard').style.display = 'none';
+      document.getElementById('idleActionRow').style.display = 'grid';
+    }
+
+    function usarGPSComoOrigen() {
+      const base = userCoords || { lat: CURICO_CENTER[0], lng: CURICO_CENTER[1] };
+      origenCoords = { lat: base.lat, lng: base.lng };
+      document.getElementById('inputOrigen').value = userCoords ? 'Mi ubicación actual' : 'Centro de Curicó (sin GPS)';
+      document.getElementById('suggestionsList').style.display = 'none';
+      if (markerOrigen) map.removeLayer(markerOrigen);
+      markerOrigen = L.circleMarker([origenCoords.lat, origenCoords.lng], {
+        radius: 6, color: '#1d4ed8', weight: 2.5, fillColor: '#ffffff', fillOpacity: 1
+      }).addTo(map);
+      if (destinoCoords) calcularRutas();
+    }
+
+    let debounceTimer;
+    function buscarSugerencias(texto, campo) {
+      clearTimeout(debounceTimer);
+      const list = document.getElementById('suggestionsList');
+      const q = texto.trim();
+
+      if (!q || q.includes('Mi ubicación actual')) {
+        if (campo === 'destino' && !q) renderizarSugerencias(lugaresCurico.slice(0, 5), campo);
+        else list.style.display = 'none';
+        return;
+      }
+
+      const locales = lugaresCurico.filter(l =>
+        l.nombre.toLowerCase().includes(q.toLowerCase()) ||
+        l.sub.toLowerCase().includes(q.toLowerCase())
+      );
+      if (locales.length > 0) renderizarSugerencias(locales, campo);
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q + ' Curico')}&lat=-34.9854&lon=-71.2394&limit=5`;
+          const res = await fetch(url);
+          const geo = await res.json();
+          const remotos = (geo.features || []).map(f => {
+            const p = f.properties;
+            const nombre = p.name || p.street || q;
+            const detalle = [p.street, p.housenumber, p.district || p.city || 'Curicó'].filter(Boolean).join(', ');
+            return { nombre, sub: detalle, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+          });
+
+          const combinados = [...locales];
+          remotos.forEach(r => {
+            if (!combinados.some(c => c.nombre.toLowerCase() === r.nombre.toLowerCase())) combinados.push(r);
+          });
+          renderizarSugerencias(combinados.slice(0, 6), campo);
+        } catch (e) {
+          if (locales.length === 0) list.style.display = 'none';
+        }
+      }, 200);
+    }
+
+    function renderizarSugerencias(items, campo) {
+      const list = document.getElementById('suggestionsList');
+      if (!items || items.length === 0) { list.style.display = 'none'; return; }
+      list.style.display = 'block';
+      list.innerHTML = items.map(r => `
+        <div class="suggestion-item" onclick="seleccionarLugar(${r.lat}, ${r.lng}, '${r.nombre.replace(/'/g, '')}', '${campo}')">
+          ${SVG.pin}
+          <div>
+            <div class="sug-title">${r.nombre}</div>
+            <div class="sug-sub">${r.sub}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function seleccionarLugar(lat, lng, nombre, campo) {
+      document.getElementById('suggestionsList').style.display = 'none';
+      if (campo === 'origen') {
+        origenCoords = { lat, lng };
+        document.getElementById('inputOrigen').value = nombre;
+        if (markerOrigen) map.removeLayer(markerOrigen);
+        markerOrigen = L.marker([lat, lng]).addTo(map).bindPopup('Origen: ' + nombre);
+        if (destinoCoords) calcularRutas();
+      } else {
+        fijarDestino(lat, lng, nombre);
+      }
+    }
+
+    map.on('click', e => {
+      document.getElementById('weatherDrawer').style.display = 'none';
+      document.getElementById('filterPopover').style.display = 'none';
+      document.getElementById('gpsDrawer').style.display = 'none';
+      document.getElementById('suggestionsList').style.display = 'none';
+
+      if (modoFijarUbicacionManual) {
+        fijarUbicacionManual(e.latlng.lat, e.latlng.lng);
+        return;
+      }
+
+      if (modoRutaActivo) {
+        fijarDestino(e.latlng.lat, e.latlng.lng, `Punto seleccionado (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`);
+      }
+    });
+
+    function fijarDestino(lat, lng, etiqueta) {
+      destinoCoords = { lat, lng };
+      document.getElementById('inputDestino').value = etiqueta;
+      document.getElementById('suggestionsList').style.display = 'none';
+      if (markerDestino) map.removeLayer(markerDestino);
+      markerDestino = L.marker([lat, lng]).addTo(map).bindPopup('Destino');
+      calcularRutas();
+    }
+
+    function cambiarModoTransporte(modo) {
+      modoTransporte = modo;
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('mode-' + modo).classList.add('active');
+      if (destinoCoords) calcularRutas();
+    }
+
+    // --- MOTOR DE RUTAS: RUTA MÁS CORTA VS DESVÍO SEGURO ---
+    async function consultarOSRM(waypoints, perfilOSRM, alternatives = false) {
+      const coordsStr = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
+      const url = `https://router.project-osrm.org/route/v1/${perfilOSRM}/${coordsStr}?overview=full&geometries=geojson&alternatives=${alternatives}`;
+      const res = await fetch(url);
+      return await res.json();
+    }
+
+    function obtenerPeligrosEnRuta(puntosRuta) {
+      const peligros = [];
+      const mapaRiesgoModo = { driving: 'Motorizado', cycling: 'Ciclista', foot: 'Peatonal' };
+      const riesgoObjetivo = mapaRiesgoModo[modoTransporte];
+
+      todasLasAlertas.forEach(inc => {
+        const det = inc.clasificacion_detalle;
+        if (!(det.nivel_riesgo === riesgoObjetivo || det.tipo === 'Temporal' || det.riesgo_climatico)) return;
+        if (puntosRuta.some(p => distanciaKm(p[0], p[1], inc.latitud, inc.longitud) < 0.11)) {
+          peligros.push({
+            lat: inc.latitud,
+            lng: inc.longitud,
+            etiqueta: `${det.nombre_evento} (${det.nivel_riesgo})`
+          });
+        }
+      });
+
+      if (lluviaActiva) {
+        zonasInundablesCurico.forEach(z => {
+          if (puntosRuta.some(p => distanciaKm(p[0], p[1], z.lat, z.lng) < 0.17)) {
+            peligros.push({
+              lat: z.lat,
+              lng: z.lng,
+              etiqueta: `Zona inundable: ${z.nombre}`
+            });
+          }
+        });
+      }
+      return peligros;
+    }
+
+    function tieneBucleOIdaYVuelta(coords) {
+      const acum = [0];
+      for (let i = 1; i < coords.length; i++) {
+        acum.push(acum[i - 1] + distanciaKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]));
+      }
+      for (let i = 0; i < coords.length; i += 2) {
+        for (let j = i + 4; j < coords.length; j += 2) {
+          if ((acum[j] - acum[i]) > 0.16) {
+            if (distanciaKm(coords[i][0], coords[i][1], coords[j][0], coords[j][1]) < 0.035) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    async function calcularDesvioAlrededorDePeligros(origen, destino, perfilOSRM, peligros) {
+      const hLat = peligros.reduce((s, p) => s + p.lat, 0) / peligros.length;
+      const hLng = peligros.reduce((s, p) => s + p.lng, 0) / peligros.length;
+
+      const dLat = destino.lat - origen.lat;
+      const dLng = destino.lng - origen.lng;
+      const norm = Math.sqrt(dLat * dLat + dLng * dLng) || 1;
+      const ux = dLat / norm;
+      const uy = dLng / norm;
+
+      const offsets = [0.0028, 0.0052, 0.0078];
+      const waypointsCandidatos = [];
+      offsets.forEach(off => {
+        waypointsCandidatos.push({ lat: hLat - uy * off, lng: hLng + ux * off });
+        waypointsCandidatos.push({ lat: hLat + uy * off, lng: hLng - ux * off });
+      });
+
+      const promesas = waypointsCandidatos.map(async wp => {
+        try {
+          const res = await consultarOSRM([origen, wp, destino], perfilOSRM, false);
+          if (!res.routes || !res.routes[0]) return null;
+          const coords = res.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+          const remPeligros = obtenerPeligrosEnRuta(coords);
+          const bucle = tieneBucleOIdaYVuelta(coords);
+          const score = (remPeligros.length * 100000) + (bucle ? 50000 : 0) + res.routes[0].distance;
+          return { coords, dist: res.routes[0].distance, peligros: remPeligros, bucle, score };
+        } catch (e) {
+          return null;
+        }
+      });
+
+      const resultados = (await Promise.all(promesas)).filter(Boolean);
+      resultados.sort((a, b) => a.score - b.score);
+      return resultados[0] || null;
+    }
+
+    function calcularMinutos(distMeters) {
+      const distKm = distMeters / 1000;
+      const velKmh = modoTransporte === 'driving' ? 35 : (modoTransporte === 'cycling' ? 15 : 5);
+      return Math.max(1, Math.round((distKm / velKmh) * 60));
+    }
+
+    async function calcularRutas() {
+      if (!origenCoords) usarGPSComoOrigen();
+      const perfilOSRM = modoTransporte === 'driving' ? 'driving' : (modoTransporte === 'cycling' ? 'bike' : 'foot');
+
+      const data = await consultarOSRM([origenCoords, destinoCoords], perfilOSRM, true);
+      if (!data.routes || data.routes.length === 0) return;
+
+      const rutasOSRM = [...data.routes].sort((a, b) => a.distance - b.distance);
+      const rCorta = rutasOSRM[0];
+      const coordsCorta = rCorta.geometry.coordinates.map(c => [c[1], c[0]]);
+      const peligrosCorta = obtenerPeligrosEnRuta(coordsCorta);
+
+      rutasCalculadas.principal = {
+        coords: coordsCorta,
+        dist: rCorta.distance,
+        min: calcularMinutos(rCorta.distance),
+        peligros: peligrosCorta
+      };
+      rutasCalculadas.alternativa = null;
+
+      if (peligrosCorta.length > 0) {
+        let mejorAlt = null;
+        for (let i = 1; i < rutasOSRM.length; i++) {
+          const cAlt = rutasOSRM[i].geometry.coordinates.map(c => [c[1], c[0]]);
+          const pAlt = obtenerPeligrosEnRuta(cAlt);
+          if (pAlt.length < peligrosCorta.length && !tieneBucleOIdaYVuelta(cAlt)) {
+            mejorAlt = { coords: cAlt, dist: rutasOSRM[i].distance, peligros: pAlt };
+            break;
+          }
+        }
+
+        if (!mejorAlt) {
+          mejorAlt = await calcularDesvioAlrededorDePeligros(origenCoords, destinoCoords, perfilOSRM, peligrosCorta);
+        }
+
+        if (mejorAlt && mejorAlt.peligros.length < peligrosCorta.length) {
+          rutasCalculadas.alternativa = {
+            coords: mejorAlt.coords,
+            dist: mejorAlt.dist,
+            min: calcularMinutos(mejorAlt.dist),
+            peligros: mejorAlt.peligros
+          };
+          rutasCalculadas.seleccionada = 'alternativa';
+        } else {
+          rutasCalculadas.seleccionada = 'principal';
+        }
+      } else {
+        rutasCalculadas.seleccionada = 'principal';
+      }
+
+      renderizarRutasEnMapaYPanel();
+    }
+
+    function seleccionarOpcionRuta(tipo) {
+      rutasCalculadas.seleccionada = tipo;
+      renderizarRutasEnMapaYPanel();
+    }
+
+    function renderizarRutasEnMapaYPanel() {
+      layerRutas.clearLayers();
+      const { principal, alternativa, seleccionada } = rutasCalculadas;
+      if (!principal) return;
+
+      const tienePeligro = principal.peligros.length > 0;
+      const boundsPoints = [...principal.coords];
+
+      if (alternativa) {
+        boundsPoints.push(...alternativa.coords);
+        if (seleccionada === 'alternativa') {
+          L.polyline(principal.coords, { color: '#dc2626', weight: 4, opacity: 0.45, dashArray: '6, 6' }).addTo(layerRutas);
+          L.polyline(alternativa.coords, { color: '#059669', weight: 6, opacity: 0.95 }).addTo(layerRutas);
+        } else {
+          L.polyline(alternativa.coords, { color: '#059669', weight: 4, opacity: 0.45, dashArray: '6, 6' }).addTo(layerRutas);
+          L.polyline(principal.coords, { color: '#dc2626', weight: 6, opacity: 0.95 }).addTo(layerRutas);
+        }
+      } else {
+        L.polyline(principal.coords, {
+          color: tienePeligro ? '#dc2626' : '#1d4ed8',
+          weight: 6,
+          opacity: 0.95
+        }).addTo(layerRutas);
+      }
+
+      map.fitBounds(L.latLngBounds(boundsPoints), { padding: [45, 225] });
+
+      const area = document.getElementById('routeResultArea');
+      const stack = document.getElementById('routeOptionsStack');
+      area.style.display = 'block';
+
+      let html = '';
+      if (alternativa) {
+        const selAlt = seleccionada === 'alternativa' ? 'selected-safe' : '';
+        html += `
+          <div class="route-option-card ${selAlt}" onclick="seleccionarOpcionRuta('alternativa')">
+            <div>
+              <div class="route-opt-label" style="color:var(--safe-emerald);">
+                ${SVG.shield} <span>Ruta segura recomendada</span>
+              </div>
+              <div class="route-opt-sub">Desvío por calles libres de incidencias</div>
+            </div>
+            <div class="route-opt-metrics">
+              <div class="route-opt-min">${alternativa.min} min</div>
+              <div class="route-opt-km">${(alternativa.dist / 1000).toFixed(2)} km</div>
+            </div>
+          </div>
+        `;
+      }
+
+      const selShort = seleccionada === 'principal' ? (tienePeligro ? 'selected-danger' : 'selected-short') : '';
+      const nombresPeligros = [...new Set(principal.peligros.map(p => p.etiqueta))].join(' · ');
+      html += `
+        <div class="route-option-card ${selShort}" onclick="seleccionarOpcionRuta('principal')">
+          <div>
+            <div class="route-opt-label" style="color:${tienePeligro ? 'var(--danger-red)' : 'var(--brand-blue)'};">
+              ${tienePeligro ? SVG.alert : SVG.check}
+              <span>${tienePeligro ? 'Ruta más corta (con alerta)' : 'Ruta más corta'}</span>
+            </div>
+            <div class="route-opt-sub">${tienePeligro ? nombresPeligros : 'Vía despejada para tu transporte'}</div>
+          </div>
+          <div class="route-opt-metrics">
+            <div class="route-opt-min">${principal.min} min</div>
+            <div class="route-opt-km">${(principal.dist / 1000).toFixed(2)} km</div>
+          </div>
+        </div>
+      `;
+
+      stack.innerHTML = html;
+    }
+
+    // --- ALERTAS EN MAPA Y PESTAÑA "CERCA DE MÍ" ---
+    function distanciaKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    async function cargarAlertas() {
+      const res = await fetch('/api/incidencias/');
+      todasLasAlertas = await res.json();
+      aplicarFiltrosMapa();
+      renderAlertasCercanas();
+      verificarAlertasProximidad();
+    }
+
+    function setFiltroRiesgo(riesgo, btn) {
+      filtroRiesgo = riesgo;
+      document.querySelectorAll('#riskChips .chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      aplicarFiltrosMapa();
+    }
+
+    function toggleSoloCercaMapa() {
+      const chk = document.getElementById('chkCerca');
+      chk.checked = !chk.checked;
+      document.getElementById('btnNearTool').classList.toggle('active', chk.checked);
+      aplicarFiltrosMapa();
+    }
+
+    function aplicarFiltrosMapa() {
+      layerAlertas.clearLayers();
+      markersPorAlertaId = {};
+      if (circuloProximidad) { map.removeLayer(circuloProximidad); circuloProximidad = null; }
+
+      const soloCerca = document.getElementById('chkCerca').checked;
+      const soloClima = document.getElementById('chkClimaFiltro').checked;
+      const base = userCoords || { lat: CURICO_CENTER[0], lng: CURICO_CENTER[1] };
+
+      if (soloCerca) {
+        circuloProximidad = L.circle([base.lat, base.lng], {
+          radius: 1500, color: '#1d4ed8', fillOpacity: 0.07, weight: 1.5
+        }).addTo(map);
+      }
+
+      todasLasAlertas.filter(inc => {
+        const det = inc.clasificacion_detalle;
+        if (filtroRiesgo && det.nivel_riesgo !== filtroRiesgo) return false;
+        if (soloClima && !(det.riesgo_climatico || det.tipo === 'Temporal')) return false;
+        if (soloCerca && distanciaKm(base.lat, base.lng, inc.latitud, inc.longitud) > 1.5) return false;
+        return true;
+      }).forEach(inc => {
+        const det = inc.clasificacion_detalle;
+        const fechaPub = obtenerFechaPublicacion(inc);
+        let color = '#d97706', pinSvg = SVG.pinWalk;
+        if (det.riesgo_climatico || det.tipo === 'Temporal') { color = '#1d4ed8'; pinSvg = SVG.pinFlood; }
+        else if (det.nivel_riesgo === 'Motorizado') { color = '#dc2626'; pinSvg = SVG.pinCar; }
+        else if (det.nivel_riesgo === 'Ciclista') { color = '#ea580c'; pinSvg = SVG.pinBike; }
+
+        const icon = L.divIcon({
+          className: '',
+          html: `<div class="custom-pin" style="background:${color}">${pinSvg}</div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+        const marker = L.marker([inc.latitud, inc.longitud], { icon }).addTo(layerAlertas).bindPopup(`
+          <div style="width:185px; font-family:Inter,sans-serif;">
+            <img src="${inc.fotografia}" style="width:100%; height:88px; object-fit:cover; border-radius:6px; margin-bottom:6px;">
+            <div style="font-weight:700; font-size:13px; color:#0f172a;">${det.nombre_evento}</div>
+            <div style="font-size:11.5px; color:#475569; margin-top:2px;">Riesgo ${det.nivel_riesgo} · ${inc.estado_actual}</div>
+            <div style="font-size:11px; color:#64748b; margin-top:3px;">Publicado: ${fechaPub}</div>
+          </div>
+        `);
+        markersPorAlertaId[inc.id] = marker;
+      });
+    }
+
+    function cambiarOrdenCerca(criterio) {
+      ordenCerca = criterio;
+      document.getElementById('sortDistBtn').classList.toggle('active', criterio === 'distancia');
+      document.getElementById('sortDateBtn').classList.toggle('active', criterio === 'fecha');
+      renderAlertasCercanas();
+    }
+
+    function renderAlertasCercanas() {
+      const cont = document.getElementById('listaAlertasCerca');
+      const base = userCoords || { lat: CURICO_CENTER[0], lng: CURICO_CENTER[1] };
+      const radioMaxKm = parseFloat(document.getElementById('radioCercaSelect')?.value || '999');
+
+      const filtradas = todasLasAlertas.map(inc => ({
+        ...inc,
+        dist: distanciaKm(base.lat, base.lng, inc.latitud, inc.longitud),
+        ts: obtenerTimestampAlerta(inc)
+      })).filter(inc => inc.dist <= radioMaxKm);
+
+      if (ordenCerca === 'fecha') filtradas.sort((a, b) => b.ts - a.ts);
+      else filtradas.sort((a, b) => a.dist - b.dist);
+
+      document.getElementById('contadorCerca').textContent = `${filtradas.length} reporte${filtradas.length === 1 ? '' : 's'}`;
+
+      if (filtradas.length === 0) {
+        cont.innerHTML = '<div class="card-box" style="font-size:13px; color:#64748b;">No hay incidencias activas dentro del radio seleccionado.</div>';
+        return;
+      }
+
+      cont.innerHTML = filtradas.map(inc => {
+        const det = inc.clasificacion_detalle;
+        const esTemp = det.tipo === 'Temporal';
+        const distTexto = inc.dist < 1 ? `${Math.round(inc.dist * 1000)} m` : `${inc.dist.toFixed(1)} km`;
+        const fechaPub = obtenerFechaPublicacion(inc);
+        return `
+          <div class="alerta-item">
+            <img src="${inc.fotografia}" alt="Evidencia">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
+                <strong style="font-size:13.5px; color:#0f172a;">${det.nombre_evento}</strong>
+                <span class="dist-badge">a ${distTexto}</span>
+              </div>
+              <div style="font-size:12px; color:#475569; margin-top:2px;">
+                Riesgo ${det.nivel_riesgo} · ${inc.estado_actual}
+              </div>
+              <div class="fecha-tag">${SVG.clock} <span>${fechaPub}</span></div>
+              <div class="item-actions">
+                <button class="btn-ver-mapa" onclick="verAlertaEnMapa(${inc.id}, ${inc.latitud}, ${inc.longitud})">
+                  ${SVG.pin} <span>Ubicar en mapa</span>
+                </button>
+                ${esTemp ? `<button class="btn-despejar" onclick="validarDespeje(${inc.id})">${SVG.check} <span>Confirmar despeje</span></button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function validarDespeje(id) {
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`/api/incidencias/${id}/validar_despeje/`, { method: 'POST', headers });
+      if (res.ok) cargarAlertas();
+    }
+
+    // --- PESTAÑA CUENTA / USUARIO ---
+    function actualizarAvatarNav() {
+      const mini = document.getElementById('navAvatarMini');
+      if (usuarioActual) {
+        mini.innerHTML = usuarioActual.foto
+          ? `<img src="${usuarioActual.foto}" alt="Avatar">`
+          : usuarioActual.username.slice(0, 2).toUpperCase();
+      } else {
+        mini.innerHTML = SVG.user;
+      }
+    }
+
+    function renderVistaUsuario() {
+      actualizarAvatarNav();
+      if (!token || !usuarioActual) {
+        document.getElementById('authSection').style.display = 'block';
+        document.getElementById('profileSection').style.display = 'none';
+      } else {
+        document.getElementById('authSection').style.display = 'none';
+        document.getElementById('profileSection').style.display = 'block';
+        document.getElementById('profUsername').textContent = usuarioActual.username;
+        document.getElementById('profRut').textContent = `RUT: ${usuarioActual.rut}`;
+        document.getElementById('profEmail').textContent = usuarioActual.email;
+        const lg = document.getElementById('profileAvatarLg');
+        lg.innerHTML = usuarioActual.foto
+          ? `<img src="${usuarioActual.foto}" alt="Perfil">`
+          : usuarioActual.username.slice(0, 2).toUpperCase();
+        cargarMisAlertas();
+      }
+    }
+
+    function switchAuthTab(tab) {
+      document.getElementById('formLogin').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('formRegister').style.display = tab === 'register' ? 'block' : 'none';
+      document.getElementById('tabBtnLogin').classList.toggle('active', tab === 'login');
+      document.getElementById('tabBtnReg').classList.toggle('active', tab === 'register');
+      document.getElementById('authError').textContent = '';
+    }
+
+    document.getElementById('formLogin').addEventListener('submit', async e => {
+      e.preventDefault();
+      const res = await fetch('/api/token/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('loginUser').value,
+          password: document.getElementById('loginPass').value
+        })
+      });
+      if (!res.ok) {
+        document.getElementById('authError').textContent = 'Credenciales inválidas.';
+        return;
+      }
+      const data = await res.json();
+      token = data.access;
+      localStorage.setItem('ciudadano_jwt', token);
+      const profRes = await fetch('/api/auth/perfil/', { headers: { 'Authorization': `Bearer ${token}` } });
+      usuarioActual = await profRes.json();
+      localStorage.setItem('ciudadano_user', JSON.stringify(usuarioActual));
+      renderVistaUsuario();
+    });
+
+    document.getElementById('formRegister').addEventListener('submit', async e => {
+      e.preventDefault();
+      const res = await fetch('/api/auth/register/', { method: 'POST', body: new FormData(e.target) });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('authError').textContent = Object.values(data).flat().join(' ');
+        return;
+      }
+      token = data.access;
+      usuarioActual = data.usuario;
+      localStorage.setItem('ciudadano_jwt', token);
+      localStorage.setItem('ciudadano_user', JSON.stringify(usuarioActual));
+      renderVistaUsuario();
+    });
+
+    async function subirNuevaFotoPerfil(input) {
+      if (!input.files[0]) return;
+      const fd = new FormData();
+      fd.append('foto', input.files[0]);
+      const res = await fetch('/api/auth/perfil/', {
+        method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }, body: fd
+      });
+      if (res.ok) {
+        usuarioActual = await res.json();
+        localStorage.setItem('ciudadano_user', JSON.stringify(usuarioActual));
+        renderVistaUsuario();
+      }
+    }
+
+    async function cargarMisAlertas() {
+      const cont = document.getElementById('misAlertasLista');
+      const res = await fetch('/api/incidencias/mis_alertas/', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) { cont.innerHTML = 'No se pudo cargar el historial.'; return; }
+      const data = await res.json();
+      if (data.length === 0) {
+        cont.innerHTML = '<div class="card-box" style="font-size:13px; color:#64748b;">Aún no has publicado incidencias con esta cuenta.</div>';
+        return;
+      }
+      cont.innerHTML = data.map(inc => `
+        <div class="alerta-item">
+          <img src="${inc.fotografia}" alt="Evidencia">
+          <div style="flex:1;">
+            <strong style="font-size:13.5px;">#${inc.id} · ${inc.clasificacion_detalle.nombre_evento}</strong>
+            <div style="font-size:12px; color:var(--brand-blue); font-weight:600; margin-top:2px;">Estado: ${inc.estado_actual}</div>
+            <div style="font-size:11.5px; color:#64748b;">Riesgo ${inc.clasificacion_detalle.nivel_riesgo}</div>
+            <div class="fecha-tag">${SVG.clock} <span>${obtenerFechaPublicacion(inc)}</span></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function cerrarSesion() {
+      token = ''; usuarioActual = null;
+      localStorage.removeItem('ciudadano_jwt');
+      localStorage.removeItem('ciudadano_user');
+      renderVistaUsuario();
+    }
+
+    // --- REPORTAR CON GPS ---
+    function abrirModalReportar() {
+      if (!token) {
+        cambiarVista('Usuario');
+        document.getElementById('authError').textContent = 'Inicia sesión o regístrate para reportar.';
+        return;
+      }
+      if (!userCoords) iniciarSeguimientoGPS(false);
+      actualizarGuardiaGPSReporte();
+      document.getElementById('modalReportar').classList.add('open');
+    }
+
+    function cerrarModalReportar() {
+      document.getElementById('modalReportar').classList.remove('open');
+    }
+
+    function actualizarGuardiaGPSReporte() {
+      const box = document.getElementById('gpsGuardBox');
+      const btn = document.getElementById('btnEnviarReporte');
+      if (userCoords) {
+        const origenTexto = userCoords.modo === 'real' ? 'GPS en vivo verificado' : 'Ubicación fijada en mapa';
+        box.style.background = '#ecfdf5'; box.style.color = '#065f46'; box.style.border = '1px solid #a7f3d0';
+        box.innerHTML = `${origenTexto} (${userCoords.lat.toFixed(5)}, ${userCoords.lng.toFixed(5)})`;
+        btn.disabled = false;
+      } else {
+        box.style.background = '#fef2f2'; box.style.color = '#991b1b'; box.style.border = '1px solid #fecaca';
+        box.innerHTML = `
+          ${!window.isSecureContext
+            ? 'El navegador bloqueó el GPS porque estás entrando por HTTP sin certificado seguro.'
+            : 'Activa tu ubicación GPS o márcala directamente en el mapa.'}
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" onclick="iniciarSeguimientoGPS(true)" style="padding:6px 10px; border:none; border-radius:6px; background:#dc2626; color:white; font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;">Reintentar GPS</button>
+            <button type="button" onclick="cerrarModalReportar(); activarModoPinManual();" style="padding:6px 10px; border:1px solid #991b1b; border-radius:6px; background:white; color:#991b1b; font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;">Marcar en mapa</button>
+          </div>
+        `;
+        btn.disabled = true;
+      }
+    }
+
+    document.getElementById('formNuevoReporte').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!userCoords) { actualizarGuardiaGPSReporte(); return; }
+      const fd = new FormData(e.target);
+      fd.append('latitud', userCoords.lat);
+      fd.append('longitud', userCoords.lng);
+
+      const res = await fetch('/api/incidencias/', {
+        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd
+      });
+      if (res.ok) {
+        e.target.reset();
+        cerrarModalReportar();
+        cargarAlertas();
+      } else {
+        document.getElementById('reporteFeedback').textContent = 'Error al publicar reporte.';
+      }
+    });
+
+    // --- CLIMA VERTICAL MINIMALISTA ---
+    async function cargarClimaCurico() {
+      const list = document.getElementById('weatherVerticalList');
+      document.getElementById('weatherIconSlot').innerHTML = SVG.cloud;
+      try {
+        const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-34.9854&longitude=-71.2394&current_weather=true&hourly=temperature_2m,precipitation_probability&timezone=America%2FSantiago');
+        const data = await res.json();
+        const tempActual = Math.round(data.current_weather.temperature);
+        document.getElementById('weatherMini').textContent = `${tempActual}°C · Curicó`;
+        document.getElementById('weatherBigTemp').textContent = `${tempActual}°C`;
+
+        const indicesClave = [9, 12, 15, 18, 21];
+        list.innerHTML = indicesClave.map(idx => {
+          const hora = data.hourly.time[idx].slice(11, 16);
+          const temp = Math.round(data.hourly.temperature_2m[idx]);
+          const prob = data.hourly.precipitation_probability[idx];
+          const wIcon = prob > 40 ? SVG.rain : SVG.sun;
+          return `
+            <div class="weather-row">
+              <span class="weather-row-left">${wIcon} <span>${hora}</span></span>
+              <span style="font-weight:600;">${temp}°C</span>
+              <span style="color:var(--brand-blue); font-weight:600;">${prob}%</span>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        list.innerHTML = `
+          <div class="weather-row"><span class="weather-row-left">${SVG.sun} 12:00</span><span>20°C</span><span style="color:var(--brand-blue);">10%</span></div>
+          <div class="weather-row"><span class="weather-row-left">${SVG.cloud} 18:00</span><span>16°C</span><span style="color:var(--brand-blue);">20%</span></div>
+        `;
+      }
+    }
+
+    function toggleRiesgoClimatico() {
+      lluviaActiva = document.getElementById('chkLluvia').checked;
+      layerZonasClima.clearLayers();
+      if (lluviaActiva) {
+        document.getElementById('weatherIconSlot').innerHTML = SVG.rain;
+        document.getElementById('weatherMini').textContent = 'Lluvia activa';
+        zonasInundablesCurico.forEach(z => {
+          L.circle([z.lat, z.lng], {
+            radius: 160, color: '#1d4ed8', fillColor: '#3b82f6', fillOpacity: 0.24, weight: 1.5
+          }).addTo(layerZonasClima).bindPopup(`<strong style="font-family:Inter,sans-serif;">Zona inundable:</strong> ${z.nombre}`);
+        });
+      } else {
+        cargarClimaCurico();
+      }
+      if (destinoCoords) calcularRutas();
+    }
+
+    function toggleWeather() {
+      const el = document.getElementById('weatherDrawer');
+      el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    }
+    function toggleFilters() {
+      const el = document.getElementById('filterPopover');
+      el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Arranque y monitoreo continuo
+    actualizarAvatarNav();
+    iniciarSeguimientoGPS(true);
+    cargarAlertas();
+    cargarClimaCurico();
+    setInterval(cargarAlertas, 15000);
+  </script>
+</body>
+</html>
